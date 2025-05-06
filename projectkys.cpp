@@ -1571,6 +1571,7 @@ void patientMenu(int patientindex)
 }
 // decide whether the user is a doctor or a patient and show the menu accordingly
 void menu()
+
 {
     if (loggedin_usertype == "doctor")
     {
@@ -1593,7 +1594,6 @@ void menu()
         }
     }
 }
-
 void saveData()
 {
     ofstream outfile("data.txt");
@@ -1604,6 +1604,7 @@ void saveData()
     }
 
     // Save doctors
+    outfile << doctorcount << endl;  // First save the count for easier loading
     for (int i = 0; i < doctorcount && i < MAX_DOCTORS; i++)
     {
         // Basic info
@@ -1626,25 +1627,22 @@ void saveData()
         outfile << actualSlots << " ";
 
         // Save only non-empty time slots
-        for (int j = 0; j < doctors[doctorcount].availablecount; j++) {
-            outfile << doctors[doctorcount].availabletimes[j].day << " "
-                   << doctors[doctorcount].availabletimes[j].month << " "
-                   << doctors[doctorcount].availabletimes[j].year << " "
-                   << doctors[doctorcount].availabletimes[j].beginHour << " "
-                   << doctors[doctorcount].availabletimes[j].endHour;
+        for (int j = 0; j < maxslotcount; j++) {
+            if (doctors[i].availabletimes[j].beginHour != 0 ||
+                doctors[i].availabletimes[j].endHour != 0)
+            {
+                outfile << doctors[i].availabletimes[j].day << " "
+                       << doctors[i].availabletimes[j].month << " "
+                       << doctors[i].availabletimes[j].year << " "
+                       << doctors[i].availabletimes[j].beginHour << " "
+                       << doctors[i].availabletimes[j].beginMin << " "
+                       << doctors[i].availabletimes[j].endHour << " "
+                       << doctors[i].availabletimes[j].endMin << " "
+                       << doctors[i].availabletimes[j].available << " ";
+            }
         }
 
-        // Save patients
-        for (int i = 0; i < patientcount && i < MAX_PATIENTS; i++)
-        {
-            outfile << patients[i].name << " "
-                    << patients[i].username << " "
-                    << patients[i].password << " "
-                    << patients[i].id << " "
-                    << patients[i].age << "\n";
-        }
-
-        // Save appointments
+        // Save appointments for this doctor
         outfile << doctors[i].patientcount << " ";
         for (int j = 0; j < doctors[i].patientcount && j < MAX_APPOINTMENTS; j++)
         {
@@ -1653,7 +1651,10 @@ void saveData()
                     << doctors[i].docAppointment[j].month << " "
                     << doctors[i].docAppointment[j].year << " "
                     << doctors[i].docAppointment[j].beginHour << " "
-                    << doctors[i].docAppointment[j].endHour << " ";
+                    << doctors[i].docAppointment[j].beginMin << " "
+                    << doctors[i].docAppointment[j].endHour << " "
+                    << doctors[i].docAppointment[j].endMin << " "
+                    << doctors[i].docAppointment[j].username << " ";
         }
 
         // Count ACTUAL reviews (not empty ones)
@@ -1680,11 +1681,47 @@ void saveData()
         outfile << "\n";
     }
 
+    // Save patients separately
+    outfile << patientcount << endl;
+    for (int i = 0; i < patientcount && i < MAX_PATIENTS; i++)
+    {
+        outfile << patients[i].name << " "
+                << patients[i].username << " "
+                << patients[i].password << " "
+                << patients[i].id << " "
+                << patients[i].age << " "
+                << patients[i].appointmentCount << " ";
+                
+        // Save patient appointments
+        for (int j = 0; j < patients[i].appointmentCount && j < MAX_APPOINTMENTS; j++)
+        {
+            outfile << patients[i].patappointments[j].doctorId << " "
+                    << patients[i].patappointments[j].day << " "
+                    << patients[i].patappointments[j].month << " "
+                    << patients[i].patappointments[j].year << " "
+                    << patients[i].patappointments[j].beginHour << " "
+                    << patients[i].patappointments[j].beginMin << " "
+                    << patients[i].patappointments[j].endHour << " "
+                    << patients[i].patappointments[j].endMin << " ";
+        }
+        
+        // Save patient reviews
+        outfile << patients[i].reviewCount << " ";
+        for (int j = 0; j < patients[i].reviewCount && j < MAX_REVIEWS; j++)
+        {
+            outfile << patients[i].reviews[j].rating << " "
+                    << patients[i].reviews[j].reviewerName << " "
+                    << patients[i].reviews[j].reviewerType << " ";
+        }
+        outfile << "\n";
+    }
+
     outfile.close();
     cout << "Data saved successfully. "
          << doctorcount << " doctors, "
          << patientcount << " patients stored.\n";
 }
+
 void loadData()
 {
     ifstream infile("data.txt");
@@ -1695,61 +1732,287 @@ void loadData()
     }
 
     // Reset counters
-    doctorcount = patientcount = appointmentCount = 0;
+    doctorcount = patientcount = 0;
+
+    // Load doctor count
+    infile >> doctorcount;
+    if (doctorcount > MAX_DOCTORS)
+        doctorcount = MAX_DOCTORS;
 
     // Load doctors
-    while (infile >>
-           doctors[doctorcount].id >>
-           doctors[doctorcount].name >>
-           doctors[doctorcount].username >>
-           doctors[doctorcount].password >>
-           doctors[doctorcount].specialty >>
-           doctors[doctorcount].availablecount)
+    for (int i = 0; i < doctorcount; i++)
     {
-        doctorcount++;
-        if (doctorcount == MAX_DOCTORS)
-            break;
+        // Basic info
+        infile >> doctors[i].id
+               >> doctors[i].name
+               >> doctors[i].username
+               >> doctors[i].password
+               >> doctors[i].specialty;
+
+        // Load time slots
+        int slotCount;
+        infile >> slotCount;
+        doctors[i].availablecount = slotCount;
+        
+        for (int j = 0; j < slotCount; j++)
+        {
+            infile >> doctors[i].availabletimes[j].day
+                   >> doctors[i].availabletimes[j].month
+                   >> doctors[i].availabletimes[j].year
+                   >> doctors[i].availabletimes[j].beginHour
+                   >> doctors[i].availabletimes[j].beginMin
+                   >> doctors[i].availabletimes[j].endHour
+                   >> doctors[i].availabletimes[j].endMin
+                   >> doctors[i].availabletimes[j].available;
+        }
+
+        // Load appointments for this doctor
+        infile >> doctors[i].patientcount;
+        if (doctors[i].patientcount > MAX_APPOINTMENTS)
+            doctors[i].patientcount = MAX_APPOINTMENTS;
+            
+        for (int j = 0; j < doctors[i].patientcount; j++)
+        {
+            infile >> doctors[i].docAppointment[j].patientName
+                   >> doctors[i].docAppointment[j].day
+                   >> doctors[i].docAppointment[j].month
+                   >> doctors[i].docAppointment[j].year
+                   >> doctors[i].docAppointment[j].beginHour
+                   >> doctors[i].docAppointment[j].beginMin
+                   >> doctors[i].docAppointment[j].endHour
+                   >> doctors[i].docAppointment[j].endMin
+                   >> doctors[i].docAppointment[j].username;
+                   
+            // Set the doctor ID in the appointment
+            doctors[i].docAppointment[j].doctorId = doctors[i].id;
+        }
+
+        // Load reviews for this doctor
+        infile >> doctors[i].reviewCount;
+        if (doctors[i].reviewCount > MAX_REVIEWS)
+            doctors[i].reviewCount = MAX_REVIEWS;
+            
+        for (int j = 0; j < doctors[i].reviewCount; j++)
+        {
+            infile >> doctors[i].reviews[j].rating
+                   >> doctors[i].reviews[j].reviewerName
+                   >> doctors[i].reviews[j].reviewerType;
+        }
     }
 
+    // Load patient count
+    infile >> patientcount;
+    if (patientcount > MAX_PATIENTS)
+        patientcount = MAX_PATIENTS;
+        
     // Load patients
-    while (infile >>
-           patients[patientcount].name >>
-           patients[patientcount].username >>
-           patients[patientcount].password >>
-           patients[patientcount].id >>
-           patients[patientcount].age)
+    for (int i = 0; i < patientcount; i++)
     {
-        patientcount++;
-        if (patientcount == MAX_PATIENTS)
-            break;
+        infile >> patients[i].name
+               >> patients[i].username
+               >> patients[i].password
+               >> patients[i].id
+               >> patients[i].age
+               >> patients[i].appointmentCount;
+               
+        if (patients[i].appointmentCount > MAX_APPOINTMENTS)
+            patients[i].appointmentCount = MAX_APPOINTMENTS;
+            
+        // Load patient appointments
+        for (int j = 0; j < patients[i].appointmentCount; j++)
+        {
+            infile >> patients[i].patappointments[j].doctorId
+                   >> patients[i].patappointments[j].day
+                   >> patients[i].patappointments[j].month
+                   >> patients[i].patappointments[j].year
+                   >> patients[i].patappointments[j].beginHour
+                   >> patients[i].patappointments[j].beginMin
+                   >> patients[i].patappointments[j].endHour
+                   >> patients[i].patappointments[j].endMin;
+                   
+            // Set the patient username and name in the appointment
+            patients[i].patappointments[j].username = patients[i].username;
+            patients[i].patappointments[j].patientName = patients[i].name;
+        }
+        
+        // Load patient reviews
+        infile >> patients[i].reviewCount;
+        if (patients[i].reviewCount > MAX_REVIEWS)
+            patients[i].reviewCount = MAX_REVIEWS;
+            
+        for (int j = 0; j < patients[i].reviewCount; j++)
+        {
+            infile >> patients[i].reviews[j].rating
+                   >> patients[i].reviews[j].reviewerName
+                   >> patients[i].reviews[j].reviewerType;
+        }
     }
 
-    // Load appointments
-    while (
-
-        infile >> appointments[appointmentCount].doctorId >>
-        appointments[appointmentCount].patientName >>
-        appointments[appointmentCount].day >>
-        appointments[appointmentCount].month >>
-        appointments[appointmentCount].year >>
-        appointments[appointmentCount].username >>
-        appointments[appointmentCount].beginHour >>
-        appointments[appointmentCount].endHour)
-    {
-        appointmentCount++;
-        if (appointmentCount == MAX_APPOINTMENTS)
-            break;
-    }
-
-    infile >> doctors[doctorcount].reviewCount;
-    for (int j = 0; j < doctors[doctorcount].reviewCount; j++)
-    {
-        infile >> doctors[doctorcount].reviews[j].rating >> doctors[doctorcount].reviews[j].reviewerName >> doctors[doctorcount].reviews[j].reviewerType;
-    }
-
-    cout << "data loaded !!!!" << endl;
     infile.close();
+    cout << "Data loaded successfully. "
+         << doctorcount << " doctors, "
+         << patientcount << " patients loaded.\n";
 }
+// 
+// void saveData()
+// {
+//     ofstream outfile("data.txt");
+//     if (!outfile.is_open())
+//     {
+//         cerr << "Error: Could not open data.txt for writing\n";
+//         return;
+//     }
+// 
+//     // Save doctors
+//     for (int i = 0; i < doctorcount && i < MAX_DOCTORS; i++)
+//     {
+//         // Basic info
+//         outfile << doctors[i].id << " "
+//                 << doctors[i].name << " "
+//                 << doctors[i].username << " "
+//                 << doctors[i].password << " "
+//                 << doctors[i].specialty << " ";
+// 
+//         // Count available time slots (not empty ones)
+//         int actualSlots = 0;
+//         for (int j = 0; j < maxslotcount; j++)
+//         {
+//             if (doctors[i].availabletimes[j].beginHour != 0 ||
+//                 doctors[i].availabletimes[j].endHour != 0)
+//             {
+//                 actualSlots++;
+//             }
+//         }
+//         outfile << actualSlots << " ";
+// 
+//         // Save only non-empty time slots
+//         for (int j = 0; j < doctors[doctorcount].availablecount; j++) {
+//             outfile << doctors[doctorcount].availabletimes[j].day << " "
+//                    << doctors[doctorcount].availabletimes[j].month << " "
+//                    << doctors[doctorcount].availabletimes[j].year << " "
+//                    << doctors[doctorcount].availabletimes[j].beginHour << " "
+//                    << doctors[doctorcount].availabletimes[j].endHour;
+
+ // TODO:   Missing beginMin and endMin fields @AhmedAlTayebC
+// TODO:   accounting for the 'available' flag @AhmedAlTayebC
+
+// 
+//         // Save patients
+//         for (int i = 0; i < patientcount && i < MAX_PATIENTS; i++)
+//         {
+//             outfile << patients[i].name << " "
+//                     << patients[i].username << " "
+//                     << patients[i].password << " "
+//                     << patients[i].id << " "
+//                     << patients[i].age << "\n";
+//         }
+// 
+//         // Save appointments
+//         outfile << doctors[i].patientcount << " ";
+//         for (int j = 0; j < doctors[i].patientcount && j < MAX_APPOINTMENTS; j++)
+//         {
+//             outfile << doctors[i].docAppointment[j].patientName << " "
+//                     << doctors[i].docAppointment[j].day << " "
+//                     << doctors[i].docAppointment[j].month << " "
+//                     << doctors[i].docAppointment[j].year << " "
+//                     << doctors[i].docAppointment[j].beginHour << " "
+//                     << doctors[i].docAppointment[j].endHour << " ";
+//         }
+// 
+//         // Count ACTUAL reviews (not empty ones)
+//         int actualReviews = 0;
+//         for (int j = 0; j < MAX_REVIEWS; j++)
+//         {
+//             if (!doctors[i].reviews[j].reviewerName.empty())
+//             {
+//                 actualReviews++;
+//             }
+//         }
+//         outfile << actualReviews << " ";
+// 
+//         // Save only non-empty reviews
+//         for (int j = 0; j < MAX_REVIEWS; j++)
+//         {
+//             if (!doctors[i].reviews[j].reviewerName.empty())
+//             {
+//                 outfile << doctors[i].reviews[j].rating << " "
+//                         << doctors[i].reviews[j].reviewerName << " "
+//                         << doctors[i].reviews[j].reviewerType << " ";
+//             }
+//         }
+//         outfile << "\n";
+//     }
+// 
+//     outfile.close();
+//     cout << "Data saved successfully. "
+//          << doctorcount << " doctors, "
+//          << patientcount << " patients stored.\n";
+// }
+// // void loadData()
+// // {
+//     ifstream infile("data.txt");
+//     if (!infile)
+//     {
+//         cerr << "Error opening file!\n";
+//         return;
+//     }
+// 
+//     // Reset counters
+//     doctorcount = patientcount = appointmentCount = 0;
+// 
+//     // Load doctors
+//     while (infile >>
+//            doctors[doctorcount].id >>
+//            doctors[doctorcount].name >>
+//            doctors[doctorcount].username >>
+//            doctors[doctorcount].password >>
+//            doctors[doctorcount].specialty >>
+//            doctors[doctorcount].availablecount)
+//     {
+//         doctorcount++;
+//         if (doctorcount == MAX_DOCTORS)
+//             break;
+//     }
+// 
+//     // Load patients
+//     while (infile >>
+//            patients[patientcount].name >>
+//            patients[patientcount].username >>
+//            patients[patientcount].password >>
+//            patients[patientcount].id >>
+//            patients[patientcount].age)
+//     {
+//         patientcount++;
+//         if (patientcount == MAX_PATIENTS)
+//             break;
+//     }
+// 
+//     // Load appointments
+//     while (
+// 
+//         infile >> appointments[appointmentCount].doctorId >>
+//         appointments[appointmentCount].patientName >>
+//         appointments[appointmentCount].day >>
+//         appointments[appointmentCount].month >>
+//         appointments[appointmentCount].year >>
+//         appointments[appointmentCount].username >>
+//         appointments[appointmentCount].beginHour >>
+//         appointments[appointmentCount].endHour)
+//     {
+//         appointmentCount++;
+//         if (appointmentCount == MAX_APPOINTMENTS)
+//             break;
+//     }
+// 
+//     infile >> doctors[doctorcount].reviewCount;
+//     for (int j = 0; j < doctors[doctorcount].reviewCount; j++)
+//     {
+//         infile >> doctors[doctorcount].reviews[j].rating >> doctors[doctorcount].reviews[j].reviewerName >> doctors[doctorcount].reviews[j].reviewerType;
+//     }
+// 
+//     cout << "data loaded !!!!" << endl;
+//     infile.close();
+// }
 int main()
 {
     loadData();
@@ -1797,6 +2060,7 @@ int main()
         {
             saveData();
             cout << "Please use a valid option from the menu." << endl;
+
             continue;
         }
     }
